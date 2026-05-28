@@ -3,7 +3,7 @@ const mineflayer = require('mineflayer');
 const config = {
   host: 'nightcraft7.aternos.me',
   port: 40191,
-  username: 'AFK_BOT',
+  username: 'Steve_123', 
   version: '1.21.1',
   auth: 'offline',
   viewDistance: 'tiny',
@@ -13,7 +13,7 @@ const config = {
 let bot;
 let reconnectAttempts = 0;
 const maxReconnectAttempts = 999;
-const reconnectDelay = 1000000000000000000000000000000000000; // 10 ثواني عند الانقطاع
+const reconnectDelay = 1000; // 10 ثواني عند الانقطاع
 
 const CYCLE_ONLINE  = 5 * 60 * 60 * 1000; // 5 ساعات متصل
 const CYCLE_OFFLINE = 30 * 1000;           // 30 ثانية مقطوع ثم يرجع
