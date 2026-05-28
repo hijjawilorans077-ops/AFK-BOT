@@ -3,7 +3,7 @@ const mineflayer = require('mineflayer');
 const config = {
   host: 'nightcraft7.aternos.me',
   port: 40191,
-  username: 'AFK_BOT', // بدون مسافات — بعض السيرفرات ما تقبل مسافات بالاسم
+  username: 'AFK_BOT',
   version: '1.21.1',
   auth: 'offline',
   viewDistance: 'tiny',
@@ -13,12 +13,19 @@ const config = {
 let bot;
 let reconnectAttempts = 0;
 const maxReconnectAttempts = 999;
-const reconnectDelay = 10000; // 10 ثواني ثابتة بدون exponential backoff
+const reconnectDelay = 10000; // 10 ثواني عند الانقطاع
 
+const CYCLE_ONLINE  = 5 * 60 * 60 * 1000; // 5 ساعات متصل
+const CYCLE_OFFLINE = 30 * 1000;           // 30 ثانية مقطوع ثم يرجع
+
+let cycleTimer = null;
 let afkInterval = null;
 let jumpInterval = null;
 let walkInterval = null;
 
+// ======================================================
+// AFK
+// ======================================================
 function startAFK() {
   stopAFK();
 
@@ -55,6 +62,34 @@ function stopAFK() {
   }
 }
 
+// ======================================================
+// Cycle — يقطع كل 5 ساعات ثم يرجع بعد 30 ثانية
+// ======================================================
+function scheduleCycleDisconnect() {
+  if (cycleTimer) { clearTimeout(cycleTimer); cycleTimer = null; }
+
+  console.log(`🔁 Cycle: will disconnect in 5 hours`);
+
+  cycleTimer = setTimeout(() => {
+    console.log('🔁 5-hour cycle — disconnecting for 30 seconds...');
+    stopAFK();
+    if (bot) {
+      try { bot.end('cycle-disconnect'); } catch (_) {}
+      bot = null;
+    }
+    // بعد 30 ثانية يرجع
+    setTimeout(() => {
+      console.log('🔁 Reconnecting after cycle break...');
+      reconnectAttempts = 0;
+      createBot();
+    }, CYCLE_OFFLINE);
+
+  }, CYCLE_ONLINE);
+}
+
+// ======================================================
+// Create Bot
+// ======================================================
 function createBot() {
   try {
     bot = mineflayer.createBot({
@@ -70,6 +105,7 @@ function createBot() {
     bot.once('login', () => {
       console.log(`✅ Logged in as ${bot.username}`);
       reconnectAttempts = 0;
+      scheduleCycleDisconnect(); // ابدأ عداد الـ 5 ساعات
     });
 
     bot.on('spawn', () => {
@@ -85,18 +121,23 @@ function createBot() {
     bot.on('kicked', (reason) => {
       console.log(`❌ Kicked: ${JSON.stringify(reason)}`);
       stopAFK();
+      if (cycleTimer) { clearTimeout(cycleTimer); cycleTimer = null; }
       handleReconnect();
     });
 
     bot.on('error', (err) => {
       console.error('❌ Bot error:', err.message);
       stopAFK();
+      if (cycleTimer) { clearTimeout(cycleTimer); cycleTimer = null; }
       handleReconnect();
     });
 
     bot.on('end', () => {
+      // لو الـ end جاء من الـ cycle، handleReconnect ما تشتغل هون
+      if (!cycleTimer) return;
       console.log('🔌 Connection ended');
       stopAFK();
+      clearTimeout(cycleTimer); cycleTimer = null;
       handleReconnect();
     });
 
@@ -111,6 +152,9 @@ function createBot() {
   }
 }
 
+// ======================================================
+// Reconnect (عند الانقطاع غير المتوقع)
+// ======================================================
 function handleReconnect() {
   reconnectAttempts++;
   console.log(`⏳ Reconnecting in ${reconnectDelay / 1000}s... (Attempt ${reconnectAttempts})`);
@@ -126,9 +170,10 @@ function handleReconnect() {
 process.on('SIGINT', () => {
   console.log('\n🛑 Shutting down...');
   stopAFK();
+  if (cycleTimer) clearTimeout(cycleTimer);
   if (bot) { try { bot.quit('shutdown'); } catch (_) {} }
   process.exit(0);
 });
 
-console.log('🚀 Starting Minecraft AFK bot (offline/cracked)...');
+console.log('🚀 Starting Minecraft AFK bot...');
 createBot();
