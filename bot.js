@@ -1,104 +1,135 @@
 const mineflayer = require('mineflayer');
-const { auth } = require('minecraft-launcher-core');
 
 // Configuration
 const config = {
   host: 'nightcraft7.aternos.me',
   port: 40191,
-  username: 'AFKBOT',
+  username: 'AFK BOT',
   version: '1.21.1',
-  auth: 'offline'
+  auth: 'offline',
+  viewDistance: 'tiny',
+  chat: 'enabled'
 };
 
 let bot;
 let reconnectAttempts = 0;
-const maxReconnectAttempts = 5;
-const reconnectDelay = 5000; // Microsoft authentication
+const maxReconnectAttempts = 99; // يضل يحاول بدون ما يوقف
+const reconnectDelay = 5000;
 
-async function authenticate() {
-  // No authentication needed for offline mode
-  return new Promise((resolve) => {
-    console.log('✅ Using offline mode for authentication');
-    resolve('offline-token');
-  });
+// متغيرات AFK
+let afkInterval = null;
+let jumpInterval = null;
+let walkInterval = null;
 
-  /* Microsoft authentication (commented out for offline mode)
-  try {
-    const token = await auth({
-      username: config.username,
-      password: config.password,
-      authTitle: '00000000402b5328', // Minecraft Launcher Client ID
-      token: true,
-      userType: 'msa'
-    });
-    return token.access_token;
-  } catch (error) {
-    console.error('❌ Authentication failed:', error.message);
-    console.log('Please make sure your Microsoft credentials are correct.');
-    process.exit(1);
+function startAFK() {
+  // وقف أي AFK قديم قبل ما نبدأ
+  stopAFK();
+
+  // 1) دوران كل 25 ثانية (عشان يبين إنه حي)
+  afkInterval = setInterval(() => {
+    if (!bot || !bot.entity) return;
+    const yaw = bot.entity.yaw + (Math.random() - 0.5) * 0.4;
+    const pitch = (Math.random() - 0.5) * 0.2;
+    bot.look(yaw, pitch, false);
+  }, 25000);
+
+  // 2) مشي دائري صغير كل دقيقتين
+  walkInterval = setInterval(() => {
+    if (!bot || !bot.entity) return;
+
+    // امشي للأمام 2 ثانية
+    bot.setControlState('forward', true);
+    setTimeout(() => {
+      if (!bot) return;
+      bot.setControlState('forward', false);
+
+      // استدر شوية
+      if (bot.entity) {
+        bot.look(bot.entity.yaw + Math.PI / 2, 0, false);
+      }
+    }, 2000);
+  }, 120000);
+
+  // 3) قفزة خفيفة كل 3 دقايق
+  jumpInterval = setInterval(() => {
+    if (!bot || !bot.entity) return;
+    bot.setControlState('jump', true);
+    setTimeout(() => {
+      if (!bot) return;
+      bot.setControlState('jump', false);
+    }, 400);
+  }, 180000);
+
+  console.log('🔄 AFK mode started');
+}
+
+function stopAFK() {
+  if (afkInterval)  { clearInterval(afkInterval);  afkInterval  = null; }
+  if (jumpInterval) { clearInterval(jumpInterval); jumpInterval = null; }
+  if (walkInterval) { clearInterval(walkInterval); walkInterval = null; }
+
+  // تأكد إن كل الحركات وقفت
+  if (bot) {
+    try {
+      bot.setControlState('forward', false);
+      bot.setControlState('jump', false);
+    } catch (_) {}
   }
-  */
 }
 
 async function createBot() {
   try {
-    const accessToken = await authenticate();
     bot = mineflayer.createBot({
       host: config.host,
       port: config.port,
       username: config.username,
-      password: config.password,
       version: config.version,
       auth: config.auth,
       viewDistance: config.viewDistance,
       chat: config.chat
     });
 
-    // Event handlers
     bot.once('login', () => {
       console.log(`✅ Logged in as ${bot.username}`);
-      reconnectAttempts = 0; // Reset reconnect attempts on successful login
+      reconnectAttempts = 0;
     });
 
     bot.on('spawn', () => {
       console.log('✅ Spawned in world');
-      bot.chat('Hello! I am online and ready!');
-      
-      // Optional: Enable 3D visualization in browser (requires prismarine-viewer)
-      // mineflayerViewer(bot, { port: 3000, firstPerson: false });
+      // ما في رسالة شات — البوت صامت تماماً
+      startAFK();
     });
 
+    // البوت ما يرد على أي رسالة بالشات
     bot.on('chat', (username, message) => {
       if (username === bot.username) return;
       console.log(`💬 ${username}: ${message}`);
-      
-      // Example: Respond to specific messages
-      if (message.toLowerCase().includes('hello') || message.toLowerCase().includes('hi')) {
-        bot.chat(`Hello ${username}!`);
-      }
+      // صامت — بدون رد
     });
 
     bot.on('kicked', (reason) => {
       console.log(`❌ Kicked: ${JSON.stringify(reason)}`);
+      stopAFK();
       handleReconnect();
     });
 
     bot.on('error', (err) => {
       console.error('❌ Bot error:', err.message);
-      // Don't reconnect on authentication errors
       if (err.message.includes('auth') || err.message.includes('login')) {
-        console.error('Authentication error. Please check your credentials.');
+        console.error('Authentication error. Check your credentials.');
         process.exit(1);
       }
+      stopAFK();
       handleReconnect();
     });
 
     bot.on('end', () => {
       console.log('🔌 Connection ended');
+      stopAFK();
       handleReconnect();
     });
 
-    // Handle server messages (like "You need to be whitelisted")
+    // رسائل السيرفر المهمة فقط
     bot.on('message', (message) => {
       const msg = message.toString();
       if (msg.includes('whitelist') || msg.includes('banned') || msg.includes('kick')) {
@@ -112,34 +143,33 @@ async function createBot() {
   }
 }
 
-// Handle reconnection with exponential backoff
 function handleReconnect() {
   if (reconnectAttempts >= maxReconnectAttempts) {
-    console.error(`❌ Max reconnection attempts (${maxReconnectAttempts}) reached. Exiting...`);
+    console.error(`❌ Max reconnection attempts reached. Exiting...`);
     process.exit(1);
   }
 
-  const delay = Math.min(reconnectDelay * Math.pow(1.5, reconnectAttempts), 300000); // Cap at 5 minutes
+  const delay = Math.min(reconnectDelay * Math.pow(1.5, reconnectAttempts), 300000);
   reconnectAttempts++;
-  
-  console.log(`⏳ Reconnecting in ${delay/1000} seconds... (Attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
-  
-  // Clear any existing bot instance
+
+  console.log(`⏳ Reconnecting in ${delay / 1000}s... (Attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
+
   if (bot) {
-    bot.end('reconnecting');
+    try { bot.end('reconnecting'); } catch (_) {}
     bot = null;
   }
-  
+
   setTimeout(createBot, delay);
 }
 
-// Handle process termination
 process.on('SIGINT', () => {
   console.log('\n🛑 Shutting down bot...');
-  if (bot) bot.quit('shutdown');
+  stopAFK();
+  if (bot) {
+    try { bot.quit('shutdown'); } catch (_) {}
+  }
   process.exit(0);
 });
 
-// Start the bot
-console.log('🚀 Starting Minecraft bot...');
+console.log('🚀 Starting Minecraft AFK bot...');
 createBot();
