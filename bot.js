@@ -3,7 +3,7 @@ const mineflayer = require('mineflayer');
 const config = {
   host: 'nightcraft7.aternos.me',
   port: 40191,
-  username: 'Steve_123', 
+  username: 'AFK_BOT',
   version: '1.21.1',
   auth: 'offline',
   viewDistance: 'tiny',
@@ -13,7 +13,7 @@ const config = {
 let bot;
 let reconnectAttempts = 0;
 const maxReconnectAttempts = 999;
-const reconnectDelay = 1000; // 10 ثواني عند الانقطاع
+const reconnectDelay = 10000; // 10 ثواني عند الانقطاع
 
 const CYCLE_ONLINE  = 5 * 60 * 60 * 1000; // 5 ساعات متصل
 const CYCLE_OFFLINE = 30 * 1000;           // 30 ثانية مقطوع ثم يرجع
@@ -48,7 +48,7 @@ function startAFK() {
     if (!bot || !bot.entity) return;
     bot.setControlState('jump', true);
     setTimeout(() => { if (bot) bot.setControlState('jump', false); }, 400);
-  }, 180000);
+  }, 1000); // يقفز كل ثانية
 
   console.log('🔄 AFK mode started');
 }
