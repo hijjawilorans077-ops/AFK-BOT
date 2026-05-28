@@ -5,11 +5,9 @@ const { auth } = require('minecraft-launcher-core');
 const config = {
   host: 'nightcraft7.aternos.me',
   port: 40191,
-  username: 'AFK BOT', // Bot's in-game username
+  username: 'AFKBOT',
   version: '1.21.1',
-  auth: 'offline', // Using offline mode for private servers
-  viewDistance: 'tiny',
-  chat: 'enabled'
+  auth: 'offline'
 };
 
 let bot;
