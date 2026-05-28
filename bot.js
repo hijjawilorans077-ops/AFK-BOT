@@ -3,7 +3,7 @@ const mineflayer = require('mineflayer');
 const config = {
   host: 'nightcraft7.aternos.me',
   port: 40191,
-  username: 'AFK_BOT',
+  username: 'Stave_123',
   version: '1.21.1',
   auth: 'offline',
   viewDistance: 'tiny',
